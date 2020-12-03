@@ -2,7 +2,7 @@
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, DeriveInput, FieldsNamed};
+use syn::{parse_macro_input, DeriveInput};
 
 #[proc_macro_derive(Builder)]
 pub fn derive(input: TokenStream) -> TokenStream {
@@ -37,7 +37,8 @@ fn builder_struct(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_ma
         ..
     }) = data
     {
-        let builder_struct_fields = named_fields.iter();
+        println!("{:#?}", named_fields);
+        let builder_struct_fields = named_fields.iter().map(optionize_field);
         let builder_struct_ident = format_ident!("{}Builder", struct_ident);
         Some(quote!(
             pub struct #builder_struct_ident {
@@ -47,4 +48,10 @@ fn builder_struct(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_ma
     } else {
         None
     }
+}
+
+fn optionize_field(field: &syn::Field) -> proc_macro2::TokenStream {
+    let ref field_name = field.ident;
+    let ref field_type = field.ty;
+    quote!(#field_name: std::option::Option<#field_type>)
 }
