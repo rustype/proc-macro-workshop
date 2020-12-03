@@ -11,10 +11,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let struct_ident_original = input.ident;
     let original_struct_impl = impl_struct(&struct_ident_original, &input.data).unwrap();
     let builder_struct = builder_struct(&struct_ident_original, &input.data).unwrap();
+    let builder_impl = builder_impl(&struct_ident_original, &input.data).unwrap();
 
     quote!(
         #original_struct_impl
         #builder_struct
+        #builder_impl
     )
     .into()
 }
@@ -68,11 +70,44 @@ fn builder_struct(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_ma
     }
 }
 
+fn builder_impl(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macro2::TokenStream> {
+    if let syn::Data::Struct(syn::DataStruct {
+        fields:
+            syn::Fields::Named(syn::FieldsNamed {
+                named: named_fields,
+                ..
+            }),
+        ..
+    }) = data
+    {
+        let builder_impl_functions = named_fields.iter().map(functionize_field);
+        let builder_struct_ident = format_ident!("{}Builder", struct_ident);
+        Some(quote!(
+            impl #builder_struct_ident {
+                #(#builder_impl_functions)*
+            }
+        ))
+    } else {
+        None
+    }
+}
 
 fn initialize_field(field: &syn::Field) -> proc_macro2::TokenStream {
     let ref field_name = field.ident;
     quote!(#field_name: None)
 }
+
+fn functionize_field(field: &syn::Field) -> proc_macro2::TokenStream {
+    let ref field_name = field.ident;
+    let ref field_type = field.ty;
+    quote!(
+        fn #field_name(&mut self, #field_name: #field_type) -> &mut Self {
+            self.#field_name = Some(#field_name);
+            self
+        }
+    )
+}
+
 fn optionize_field(field: &syn::Field) -> proc_macro2::TokenStream {
     let ref field_name = field.ident;
     let ref field_type = field.ty;
