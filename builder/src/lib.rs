@@ -81,9 +81,18 @@ fn builder_impl(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macr
     }) = data
     {
         let builder_impl_functions = named_fields.iter().map(functionize_field);
+        let builder_fields = named_fields.iter().map(assign_field);
         let builder_struct_ident = format_ident!("{}Builder", struct_ident);
         Some(quote!(
             impl #builder_struct_ident {
+                pub fn build(&mut self) -> std::result::Result<#struct_ident, Box<dyn std::error::Error>> {
+                    Ok(
+                        #struct_ident {
+                            #(#builder_fields),*
+                        }
+                    )
+                }
+
                 #(#builder_impl_functions)*
             }
         ))
@@ -95,6 +104,11 @@ fn builder_impl(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macr
 fn initialize_field(field: &syn::Field) -> proc_macro2::TokenStream {
     let ref field_name = field.ident;
     quote!(#field_name: None)
+}
+
+fn assign_field(field: &syn::Field) -> proc_macro2::TokenStream {
+    let ref field_name = field.ident;
+    quote!(#field_name: self.#field_name.clone().ok_or("field was not set")?)
 }
 
 fn functionize_field(field: &syn::Field) -> proc_macro2::TokenStream {
