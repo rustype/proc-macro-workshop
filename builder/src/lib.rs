@@ -89,7 +89,7 @@ fn builder_impl(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macr
 fn initialize_field(field: &syn::Field) -> proc_macro2::TokenStream {
     let ref field_name = field.ident;
     let ref field_type = field.ty;
-    if extract_inner_type(field_type, "Vec").is_some(){
+    if extract_inner_type(field_type, "Vec").is_some() {
         quote!(#field_name: Some(vec!()))
     } else {
         quote!(#field_name: None)
@@ -118,22 +118,24 @@ fn functionize_field(field: &syn::Field) -> proc_macro2::TokenStream {
            #once_setter_tt
         );
     }
-    let attr_value = &format_ident!(
-        "{}",
-        extract_each_attr_value(&field.attrs).expect("invalid use of builder attr")
-    );
-    let vec_inner_type =
-        extract_inner_type(field_type, "Vec").expect("inner type of Vec is <>????");
-    let each_setter_tt = each_setter(attr_value, field_name, vec_inner_type);
-    if attr_value == field_name {
-        quote!(
-            #each_setter_tt
-        )
-    } else {
-        quote! (
-            #once_setter_tt
-            #each_setter_tt
-        )
+    match extract_each_attr_value(&field.attrs) {
+        Ok(attr_value) => {
+            let attr_value = &format_ident!("{}", attr_value);
+            let vec_inner_type =
+                extract_inner_type(field_type, "Vec").expect("inner type of Vec is <>????");
+            let each_setter_tt = each_setter(attr_value, field_name, vec_inner_type);
+            if attr_value == field_name {
+                quote!(
+                    #each_setter_tt
+                )
+            } else {
+                quote! (
+                    #once_setter_tt
+                    #each_setter_tt
+                )
+            }
+        }
+        Err(err) => err,
     }
 }
 
@@ -160,26 +162,30 @@ fn each_setter(
     )
 }
 
-fn extract_each_attr_value(attrs: &Vec<syn::Attribute>) -> Option<String> {
-    if !attrs.is_empty() {
-        if let Some(attr) = attrs.last() {
-            if let Ok(syn::Meta::List(list)) = attr.parse_meta() {
-                if list.path.is_ident("builder") {
-                    if let Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {
-                        path,
-                        lit: syn::Lit::Str(lit_str),
-                        ..
-                    }))) = list.nested.last()
-                    {
-                        if path.is_ident("each") {
-                            return Some(lit_str.value());
-                        }
+fn extract_each_attr_value(
+    attrs: &Vec<syn::Attribute>,
+) -> Result<String, proc_macro2::TokenStream> {
+    if let Some(attr) = attrs.last() {
+        if let Ok(syn::Meta::List(list)) = attr.parse_meta() {
+            if list.path.is_ident("builder") {
+                if let Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {
+                    path,
+                    lit: syn::Lit::Str(lit_str),
+                    ..
+                }))) = list.nested.last()
+                {
+                    if path.is_ident("each") {
+                        return Ok(lit_str.value());
+                    } else {
+                        println!("not each");
+                        return Err(syn::Error::new_spanned(list, "expected `builder(each = \"...\")`")
+                            .to_compile_error());
                     }
                 }
             }
         }
     }
-    None
+    unreachable!("you should've check for attrs emptyness before")
 }
 
 fn optionize_field(field: &syn::Field) -> proc_macro2::TokenStream {
