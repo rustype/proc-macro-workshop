@@ -20,7 +20,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     .into()
 }
 
-fn impl_struct(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macro2::TokenStream> {
+fn impl_struct(struct_ident: &syn::Ident, data: &syn::Data) -> std::option::Option<proc_macro2::TokenStream> {
     if let syn::Data::Struct(syn::DataStruct {
         fields: syn::Fields::Named(syn::FieldsNamed { named, .. }),
         ..
@@ -28,7 +28,7 @@ fn impl_struct(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macro
     {
         let builder_struct_inits = named.iter().map(initialize_field);
         let builder_struct_ident = format_ident!("{}Builder", struct_ident);
-        Some(quote! (
+        std::option::Option::Some(quote! (
             impl #struct_ident {
                 pub fn builder() -> #builder_struct_ident {
                     #builder_struct_ident {
@@ -38,11 +38,11 @@ fn impl_struct(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macro
             }
         ))
     } else {
-        None
+        std::option::Option::None
     }
 }
 
-fn builder_struct(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macro2::TokenStream> {
+fn builder_struct(struct_ident: &syn::Ident, data: &syn::Data) -> std::option::Option<proc_macro2::TokenStream> {
     if let syn::Data::Struct(syn::DataStruct {
         fields: syn::Fields::Named(syn::FieldsNamed { named, .. }),
         ..
@@ -50,17 +50,17 @@ fn builder_struct(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_ma
     {
         let builder_struct_fields = named.iter().map(optionize_field);
         let builder_struct_ident = format_ident!("{}Builder", struct_ident);
-        Some(quote!(
+        std::option::Option::Some(quote!(
             pub struct #builder_struct_ident {
                 #(#builder_struct_fields),*
             }
         ))
     } else {
-        None
+        std::option::Option::None
     }
 }
 
-fn builder_impl(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macro2::TokenStream> {
+fn builder_impl(struct_ident: &syn::Ident, data: &syn::Data) -> std::option::Option<proc_macro2::TokenStream> {
     if let syn::Data::Struct(syn::DataStruct {
         fields: syn::Fields::Named(syn::FieldsNamed { named, .. }),
         ..
@@ -69,10 +69,10 @@ fn builder_impl(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macr
         let builder_impl_functions = named.iter().map(functionize_field);
         let builder_fields = named.iter().map(assign_field);
         let builder_struct_ident = format_ident!("{}Builder", struct_ident);
-        Some(quote!(
+        std::option::Option::Some(quote!(
             impl #builder_struct_ident {
-                pub fn build(&mut self) -> std::result::Result<#struct_ident, Box<dyn std::error::Error>> {
-                    Ok(
+                pub fn build(&mut self) -> std::result::Result<#struct_ident, std::boxed::Box<dyn std::error::Error>> {
+                    std::result::Result::Ok(
                         #struct_ident {
                             #(#builder_fields),*
                         }
@@ -82,7 +82,7 @@ fn builder_impl(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macr
             }
         ))
     } else {
-        None
+        std::option::Option::None
     }
 }
 
@@ -90,9 +90,9 @@ fn initialize_field(field: &syn::Field) -> proc_macro2::TokenStream {
     let ref field_name = field.ident;
     let ref field_type = field.ty;
     if extract_inner_type(field_type, "Vec").is_some() {
-        quote!(#field_name: Some(vec!()))
+        quote!(#field_name: std::option::Option::Some(vec!()))
     } else {
-        quote!(#field_name: None)
+        quote!(#field_name: std::option::Option::None)
     }
 }
 
@@ -109,7 +109,7 @@ fn assign_field(field: &syn::Field) -> proc_macro2::TokenStream {
 fn functionize_field(field: &syn::Field) -> proc_macro2::TokenStream {
     let field_name = field.ident.as_ref().unwrap();
     let mut field_type = &field.ty;
-    if let Some(inner_ty) = extract_inner_type(field_type, "Option") {
+    if let std::option::Option::Some(inner_ty) = extract_inner_type(field_type, "Option") {
         field_type = inner_ty;
     }
     let once_setter_tt = once_setter(field_name, field_type);
@@ -119,7 +119,7 @@ fn functionize_field(field: &syn::Field) -> proc_macro2::TokenStream {
         );
     }
     match extract_each_attr_value(&field.attrs) {
-        Ok(attr_value) => {
+        std::result::Result::Ok(attr_value) => {
             let attr_value = &format_ident!("{}", attr_value);
             let vec_inner_type =
                 extract_inner_type(field_type, "Vec").expect("inner type of Vec is <>????");
@@ -135,13 +135,13 @@ fn functionize_field(field: &syn::Field) -> proc_macro2::TokenStream {
                 )
             }
         }
-        Err(err) => err,
+        std::result::Result::Err(err) => err,
     }
 }
 
 fn once_setter(field_name: &syn::Ident, field_type: &syn::Type) -> proc_macro2::TokenStream {
     quote!(fn #field_name(&mut self, #field_name: #field_type) -> &mut Self {
-        self.#field_name = Some(#field_name);
+        self.#field_name = std::option::Option::Some(#field_name);
         self
     })
 }
@@ -152,10 +152,10 @@ fn each_setter(
 ) -> proc_macro2::TokenStream {
     quote!(
         fn #method_name(&mut self, #field_name: #field_type) -> &mut Self {
-            if let Some(ref mut v) = self.#field_name {
+            if let std::option::Option::Some(ref mut v) = self.#field_name {
                 v.push(#field_name);
             } else {
-                self.#field_name = Some(vec![#field_name]);
+                self.#field_name = std::option::Option::Some(vec![#field_name]);
             }
             self
         }
@@ -165,20 +165,20 @@ fn each_setter(
 fn extract_each_attr_value(
     attrs: &Vec<syn::Attribute>,
 ) -> Result<String, proc_macro2::TokenStream> {
-    if let Some(attr) = attrs.last() {
-        if let Ok(syn::Meta::List(list)) = attr.parse_meta() {
+    if let std::option::Option::Some(attr) = attrs.last() {
+        if let std::result::Result::Ok(syn::Meta::List(list)) = attr.parse_meta() {
             if list.path.is_ident("builder") {
-                if let Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {
+                if let std::option::Option::Some(syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {
                     path,
                     lit: syn::Lit::Str(lit_str),
                     ..
                 }))) = list.nested.last()
                 {
                     if path.is_ident("each") {
-                        return Ok(lit_str.value());
+                        return std::result::Result::Ok(lit_str.value());
                     } else {
                         println!("not each");
-                        return Err(syn::Error::new_spanned(list, "expected `builder(each = \"...\")`")
+                        return std::result::Result::Err(syn::Error::new_spanned(list, "expected `builder(each = \"...\")`")
                             .to_compile_error());
                     }
                 }
@@ -204,15 +204,15 @@ fn extract_inner_type<'t>(ty: &'t syn::Type, expected_ident: &str) -> Option<&'t
         ..
     }) = ty
     {
-        if let Some(syn::PathSegment {
+        if let std::option::Option::Some(syn::PathSegment {
             ident,
             arguments:
                 syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments { args, .. }),
         }) = segments.last()
         {
             if ident == expected_ident {
-                if let Some(syn::GenericArgument::Type(ty)) = args.last() {
-                    return Some(ty);
+                if let std::option::Option::Some(syn::GenericArgument::Type(ty)) = args.last() {
+                    return std::option::Option::Some(ty);
                 }
             }
         }
