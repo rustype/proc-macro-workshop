@@ -88,7 +88,12 @@ fn builder_impl(struct_ident: &syn::Ident, data: &syn::Data) -> Option<proc_macr
 
 fn initialize_field(field: &syn::Field) -> proc_macro2::TokenStream {
     let ref field_name = field.ident;
-    quote!(#field_name: None)
+    let ref field_type = field.ty;
+    if extract_inner_type(field_type, "Vec").is_some(){
+        quote!(#field_name: Some(vec!()))
+    } else {
+        quote!(#field_name: None)
+    }
 }
 
 fn assign_field(field: &syn::Field) -> proc_macro2::TokenStream {
