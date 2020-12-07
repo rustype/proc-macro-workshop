@@ -6,17 +6,12 @@
 // To run the code:
 //     $ cargo run
 
-use derive_builder::Builder;
+use derive_debug::CustomDebug;
 
-type Option = ();
-type Some = ();
-type None = ();
-type Result = ();
-type Box = ();
-
-#[derive(Builder)]
-pub struct Command {
-    executable: String,
+#[derive(CustomDebug)]
+pub struct Field {
+    name: &'static str,
+    bitmask: u16,
 }
 
 fn main() {}
