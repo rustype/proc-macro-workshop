@@ -36,7 +36,7 @@ fn parse_derive_input(input: &syn::DeriveInput) -> syn::Result<proc_macro2::Toke
                             Ok(syn::Meta::NameValue(syn::MetaNameValue {lit, ..})) => {
                                 let debug_assign_value = lit;
                                 quote!(
-                                    .field(#named_field_ident_str, &format!("{}", format_args!(#debug_assign_value, &self.#named_field_ident)))
+                                    .field(#named_field_ident_str, &format_args!(#debug_assign_value, &self.#named_field_ident))
                                 )
                             }
                             Ok(meta) => syn::Error::new_spanned(meta, "expected meta name value").to_compile_error(),
