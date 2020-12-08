@@ -2,7 +2,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, parse_macro_input, parse_quote};
+use syn::{parse_macro_input, parse_quote, DeriveInput};
 
 #[proc_macro_derive(CustomDebug, attributes(debug))]
 pub fn derive(input: TokenStream) -> TokenStream {
@@ -25,7 +25,7 @@ fn parse_derive_input(input: &syn::DeriveInput) -> syn::Result<proc_macro2::Toke
 
     let struct_ident_str = format!("{}", struct_ident);
     let debug_fields = match struct_fields {
-        syn::Fields::Named(fields_named) => handle_named_fields(fields_named),
+        syn::Fields::Named(fields_named) => handle_named_fields(fields_named)?,
         syn::Fields::Unnamed(fields_unnamed) => {
             let field_indexes = (0..fields_unnamed.unnamed.len()).map(syn::Index::from);
             let field_indexes_str = (0..fields_unnamed.unnamed.len()).map(|idx| format!("{}", idx));
@@ -45,16 +45,8 @@ fn parse_derive_input(input: &syn::DeriveInput) -> syn::Result<proc_macro2::Toke
     ))
 }
 
-fn handle_named_fields(fields: &syn::FieldsNamed) -> proc_macro2::TokenStream {
-    let field_idents: Result<Vec<proc_macro2::TokenStream>, syn::Error> =
-        fields.named.iter().map(parse_named_field).collect();
-    match field_idents {
-        Ok(tokens) => {
-            let field_idents = tokens.iter();
-            quote!(#( #field_idents )*)
-        }
-        Err(e) => e.to_compile_error(),
-    }
+fn handle_named_fields(fields: &syn::FieldsNamed) -> syn::Result<proc_macro2::TokenStream> {
+    fields.named.iter().map(parse_named_field).collect()
 }
 
 fn parse_named_field(field: &syn::Field) -> syn::Result<proc_macro2::TokenStream> {
