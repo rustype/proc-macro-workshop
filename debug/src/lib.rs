@@ -1,5 +1,3 @@
-extern crate proc_macro;
-
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, parse_quote, DeriveInput};
@@ -74,7 +72,7 @@ fn parse_named_field_attrs(field: &syn::Field) -> syn::Result<proc_macro2::Token
         Ok(syn::Meta::NameValue(syn::MetaNameValue { lit, .. })) => {
             let debug_assign_value = lit;
             syn::Result::Ok(quote!(
-                .field(#ident_str, &format_args!(#debug_assign_value, &self.#ident))
+                .field(#ident_str, &std::format_args!(#debug_assign_value, &self.#ident))
             ))
         }
         Ok(meta) => syn::Result::Err(syn::Error::new_spanned(meta, "expected meta name value")),
@@ -97,10 +95,17 @@ fn parse_data(data: &syn::Data) -> syn::Result<&syn::DataStruct> {
 fn add_debug_bound(fields: &syn::Fields, mut generics: syn::Generics) -> syn::Generics {
     let mut phantom_ty_idents = std::collections::HashSet::new();
     let mut non_phantom_ty_idents = std::collections::HashSet::new();
+    let g = generics.clone();
     for (ident, opt_iter) in fields
         .iter()
         .flat_map(extract_ty_path)
-        .map(extract_ty_idents)
+        .map(|path| extract_ty_idents(path, g.params.iter().flat_map(|p| {
+            if let syn::GenericParam::Type(ty) = p {
+                std::option::Option::Some(&ty.ident)
+            } else {
+                std::option::Option::None
+            }
+        } ).collect()))
     {
         if ident == "PhantomData" {
             // If the field type ident is `PhantomData`
@@ -146,11 +151,12 @@ fn extract_ty_path(field: &syn::Field) -> std::option::Option<&syn::Path> {
 }
 
 /// From a `syn::Path` extract both the type ident and an iterator over generic type arguments.
-fn extract_ty_idents(
-    path: &syn::Path,
+fn extract_ty_idents<'a>(
+    path: &'a syn::Path,
+    params: std::collections::HashSet<&'a syn::Ident>,
 ) -> (
-    &syn::Ident,
-    std::option::Option<impl Iterator<Item = &syn::Ident>>,
+    &'a syn::Ident,
+    std::option::Option<impl Iterator<Item = &'a syn::Ident>>,
 ) {
     let ty_segment = path.segments.last().unwrap();
     let ty_ident = &ty_segment.ident;
@@ -158,10 +164,22 @@ fn extract_ty_idents(
         args, ..
     }) = &ty_segment.arguments
     {
-        let ident_iter = args.iter().flat_map(|gen_arg| {
+        let ident_iter = args.iter().flat_map(move |gen_arg| {
             if let syn::GenericArgument::Type(syn::Type::Path(syn::TypePath { path, .. })) = gen_arg
             {
-                path.get_ident()
+                match path.segments.len() {
+                    2 => {
+                        let ty = path.segments.first().unwrap();
+                        let assoc_ty = path.segments.last().unwrap();
+                        if params.contains(&ty.ident) {
+                            std::option::Option::Some(&assoc_ty.ident)
+                        } else {
+                            std::option::Option::None
+                        }
+                    }
+                    1 => path.get_ident(),
+                    _ => std::unimplemented!("kinda tired of edge cases"),
+                }
             } else {
                 std::option::Option::None
             }
