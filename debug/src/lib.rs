@@ -20,7 +20,7 @@ fn parse_derive_input(input: &syn::DeriveInput) -> syn::Result<proc_macro2::Toke
     let struct_ident = &input.ident;
     let struct_data = parse_data(&input.data)?;
     let struct_fields = &struct_data.fields;
-    let generics = add_trait_bounds(input.generics.clone());
+    let generics = add_debug_bound(struct_fields, input.generics.clone());
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let struct_ident_str = format!("{}", struct_ident);
@@ -91,6 +91,84 @@ fn parse_data(data: &syn::Data) -> syn::Result<&syn::DataStruct> {
         syn::Data::Union(syn::DataUnion { union_token, .. }) => syn::Result::Err(
             syn::Error::new_spanned(union_token, "CustomDebug is not implemented for unions"),
         ),
+    }
+}
+
+fn add_debug_bound(fields: &syn::Fields, mut generics: syn::Generics) -> syn::Generics {
+    let mut phantom_ty_idents = std::collections::HashSet::new();
+    let mut non_phantom_ty_idents = std::collections::HashSet::new();
+    for (ident, opt_iter) in fields
+        .iter()
+        .flat_map(extract_ty_path)
+        .map(extract_ty_idents)
+    {
+        if ident == "PhantomData" {
+            // If the field type ident is `PhantomData`
+            // add the generic parameters into the phantom idents collection
+            if let std::option::Option::Some(args) = opt_iter {
+                for arg in args {
+                    phantom_ty_idents.insert(arg);
+                }
+            }
+        } else {
+            // Else, add the type and existing generic parameters into the non-phantom idents collection
+            non_phantom_ty_idents.insert(ident);
+            if let std::option::Option::Some(args) = opt_iter {
+                for arg in args {
+                    non_phantom_ty_idents.insert(arg);
+                }
+            }
+        }
+    }
+    // Find the difference between the phantom idents and non-phantom idents
+    // Collect them into an hash set for O(1) lookup
+    let non_debug_fields = phantom_ty_idents
+        .difference(&non_phantom_ty_idents)
+        .collect::<std::collections::HashSet<_>>();
+    // Iterate generic params and if their ident is NOT in the phantom fields
+    // do not add the generic bound
+    for param in generics.type_params_mut() {
+        // this is kinda shady, hoping it works
+        if !non_debug_fields.contains(&&param.ident) {
+            param.bounds.push(parse_quote!(std::fmt::Debug));
+        }
+    }
+    generics
+}
+
+/// Extract the path from the type path in a field.
+fn extract_ty_path(field: &syn::Field) -> std::option::Option<&syn::Path> {
+    if let syn::Type::Path(syn::TypePath { path, .. }) = &field.ty {
+        std::option::Option::Some(&path)
+    } else {
+        std::option::Option::None
+    }
+}
+
+/// From a `syn::Path` extract both the type ident and an iterator over generic type arguments.
+fn extract_ty_idents(
+    path: &syn::Path,
+) -> (
+    &syn::Ident,
+    std::option::Option<impl Iterator<Item = &syn::Ident>>,
+) {
+    let ty_segment = path.segments.last().unwrap();
+    let ty_ident = &ty_segment.ident;
+    if let syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
+        args, ..
+    }) = &ty_segment.arguments
+    {
+        let ident_iter = args.iter().flat_map(|gen_arg| {
+            if let syn::GenericArgument::Type(syn::Type::Path(syn::TypePath { path, .. })) = gen_arg
+            {
+                path.get_ident()
+            } else {
+                std::option::Option::None
+            }
+        });
+        (ty_ident, std::option::Option::Some(ident_iter))
+    } else {
+        (ty_ident, std::option::Option::None)
     }
 }
 
