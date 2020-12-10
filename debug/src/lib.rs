@@ -171,12 +171,3 @@ fn extract_ty_idents(
         (ty_ident, std::option::Option::None)
     }
 }
-
-fn add_trait_bounds(mut generics: syn::Generics) -> syn::Generics {
-    for param in &mut generics.params {
-        if let syn::GenericParam::Type(ref mut type_param) = *param {
-            type_param.bounds.push(parse_quote!(std::fmt::Debug));
-        }
-    }
-    generics
-}
