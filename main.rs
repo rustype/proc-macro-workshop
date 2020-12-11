@@ -5,19 +5,14 @@
 //
 // To run the code:
 //     $ cargo run
-
 use sorted::sorted;
 
 #[sorted]
-pub struct Error {
-    kind: ErrorKind,
-    message: String,
-}
-
-enum ErrorKind {
-    Io,
-    Syntax,
-    Eof,
+pub enum Error {
+    ThatFailed,
+    ThisFailed,
+    SomethingFailed,
+    WhoKnowsWhatFailed,
 }
 
 fn main() {}

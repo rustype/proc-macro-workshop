@@ -51,7 +51,7 @@ impl Seq {
     }
 
     fn replace_stream(&self, stream: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
-        println!("{:#?}", stream.into());
+        // println!("{:#?}", stream.into());
         quote!()
     }
 }

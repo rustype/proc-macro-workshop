@@ -20,6 +20,7 @@ pub fn sorted(
 }
 
 fn parse_sorted(item: syn::Item) -> syn::Result<TokenStream> {
+    println!("{:#?}", item);
     if let syn::Item::Enum(_) = item {
         syn::Result::Ok(quote!(#item))
     } else {
