@@ -21,12 +21,36 @@ pub fn sorted(
 
 fn parse_sorted(item: syn::Item) -> syn::Result<TokenStream> {
     println!("{:#?}", item);
-    if let syn::Item::Enum(_) = item {
-        syn::Result::Ok(quote!(#item))
+    if let syn::Item::Enum(item_enum) = item {
+        parse_sorted_enum(item_enum)
     } else {
         syn::Result::Err(syn::Error::new(
             proc_macro2::Span::call_site(),
             "expected enum or match expression",
         ))
     }
+}
+
+fn parse_sorted_enum(item_enum: syn::ItemEnum) -> syn::Result<TokenStream> {
+    is_sorted(item_enum.variants.iter().map(|v| &v.ident))?;
+    syn::Result::Ok(quote!(#item_enum))
+}
+
+fn is_sorted<'a, I>(iter: I) -> syn::Result<()>
+where
+    I: Iterator<Item = &'a syn::Ident>,
+{
+    let mut acc = vec![];
+    for ident in iter {
+        for acc_ident in &acc {
+            if *acc_ident > ident {
+                return syn::Result::Err(syn::Error::new_spanned(
+                    ident,
+                    format!("{} should sort before {}", ident, acc_ident),
+                ));
+            }
+        }
+        acc.push(ident);
+    }
+    syn::Result::Ok(())
 }

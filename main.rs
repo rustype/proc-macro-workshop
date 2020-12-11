@@ -8,11 +8,15 @@
 use sorted::sorted;
 
 #[sorted]
-pub enum Error {
-    ThatFailed,
-    ThisFailed,
-    SomethingFailed,
-    WhoKnowsWhatFailed,
+pub struct Error {
+    kind: ErrorKind,
+    message: String,
+}
+
+enum ErrorKind {
+    Io,
+    Syntax,
+    Eof,
 }
 
 fn main() {}
