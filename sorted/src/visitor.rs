@@ -56,6 +56,7 @@ where
     let mut acc_ident = vec![];
     let mut wild = None;
     for pat in arms.map(|arm| &arm.pat) {
+        println!("{:#?}", pat);
         if let Some(w) = wild {
             // in the case that `_ => {...}` is not the last arm
             // we return an error
@@ -70,11 +71,11 @@ where
                 ..
             }) => {
                 // there should at least an ident so unwrap should be safe
-                let last_seg_ident = &segments.last().unwrap().ident;
-                for &ident in &acc_ident {
-                    if ident > last_seg_ident {
+                let last_seg_ident = join_segments_in_string(segments.pairs());
+                for ident in acc_ident.iter() {
+                    if ident > &last_seg_ident {
                         return syn::Result::Err(syn::Error::new_spanned(
-                            last_seg_ident,
+                            segments,
                             format!("{} should sort before {}", last_seg_ident, ident),
                         ));
                     }
@@ -89,4 +90,23 @@ where
     }
 
     syn::Result::Ok(())
+}
+
+fn join_segments_in_string<'a, I>(segments: I) -> String
+where
+    I: Iterator<Item = syn::punctuated::Pair<&'a syn::PathSegment, &'a syn::token::Colon2>>,
+{
+    let mut concat_segments = String::new();
+    for pair in segments {
+        // concat_segments += ;
+        match pair {
+            syn::punctuated::Pair::Punctuated(segment, _) => {
+                concat_segments += format!("{}::", segment.ident.to_string()).as_str();
+            }
+            syn::punctuated::Pair::End(segment) => {
+                concat_segments += format!("{}", segment.ident.to_string()).as_str();
+            }
+        }
+    }
+    concat_segments
 }

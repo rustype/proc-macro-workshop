@@ -19,12 +19,10 @@ pub enum Error {
 impl Display for Error {
     #[sorted::check]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::Error::*;
-
         #[sorted]
         match self {
-            Io(e) => write!(f, "{}", e),
-            Fmt(e) => write!(f, "{}", e),
+            Error::Io(e) => write!(f, "{}", e),
+            Error::Fmt(e) => write!(f, "{}", e),
         }
     }
 }
