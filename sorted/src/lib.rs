@@ -1,7 +1,5 @@
 extern crate proc_macro;
 
-use proc_macro2::TokenStream;
-use quote::quote;
 use syn::parse_macro_input;
 
 #[proc_macro_attribute]
@@ -10,16 +8,21 @@ pub fn sorted(
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     let _ = args;
+    // since the sorted attribute only checks for sorted enums
+    // the output is the same as the input
+    let mut output = input.clone();
     let item = parse_macro_input!(input as syn::Item);
 
-    match parse_sorted(item) {
-        Ok(tt) => tt,
-        Err(err) => err.to_compile_error(),
+    // with the possible addition of an error to the out stream
+    if let syn::Result::Err(err) = parse_sorted(item) {
+        output.extend(proc_macro::TokenStream::from(err.to_compile_error()))
     }
-    .into()
+
+    output
 }
 
-fn parse_sorted(item: syn::Item) -> syn::Result<TokenStream> {
+/// Parses the `syn::Item` first checking if the item is an `Enum` variant.
+fn parse_sorted(item: syn::Item) -> syn::Result<()> {
     println!("{:#?}", item);
     if let syn::Item::Enum(item_enum) = item {
         parse_sorted_enum(item_enum)
@@ -31,11 +34,12 @@ fn parse_sorted(item: syn::Item) -> syn::Result<TokenStream> {
     }
 }
 
-fn parse_sorted_enum(item_enum: syn::ItemEnum) -> syn::Result<TokenStream> {
+fn parse_sorted_enum(item_enum: syn::ItemEnum) -> syn::Result<()> {
     is_sorted(item_enum.variants.iter().map(|v| &v.ident))?;
-    syn::Result::Ok(quote!(#item_enum))
+    syn::Result::Ok(())
 }
 
+/// Checks if the iterator of `syn::Ident`'s yields a sorted stream.
 fn is_sorted<'a, I>(iter: I) -> syn::Result<()>
 where
     I: Iterator<Item = &'a syn::Ident>,

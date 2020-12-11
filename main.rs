@@ -7,16 +7,19 @@
 //     $ cargo run
 use sorted::sorted;
 
-#[sorted]
-pub struct Error {
-    kind: ErrorKind,
-    message: String,
-}
+use std::env::VarError;
+use std::error::Error as StdError;
+use std::fmt;
+use std::io;
+use std::str::Utf8Error;
 
-enum ErrorKind {
-    Io,
-    Syntax,
-    Eof,
+#[sorted]
+pub enum Error {
+    Fmt(fmt::Error),
+    Io(io::Error),
+    Utf8(Utf8Error),
+    Var(VarError),
+    Dyn(Box<dyn StdError>),
 }
 
 fn main() {}
