@@ -53,10 +53,11 @@ fn are_arms_sorted<'a, I>(arms: I) -> syn::Result<()>
 where
     I: Iterator<Item = &'a syn::Arm>,
 {
+    // We could use one for each kind of arm but in this case it is good enough
     let mut acc_ident = vec![];
     let mut wild = None;
     for pat in arms.map(|arm| &arm.pat) {
-        println!("{:#?}", pat);
+        // println!("{:#?}", pat);
         if let Some(w) = wild {
             // in the case that `_ => {...}` is not the last arm
             // we return an error
@@ -66,6 +67,7 @@ where
             ));
         }
         match pat {
+            // ThisKind(of_thing) =>
             syn::Pat::TupleStruct(syn::PatTupleStruct {
                 path: syn::Path { segments, .. },
                 ..
@@ -82,7 +84,24 @@ where
                 }
                 acc_ident.push(last_seg_ident);
             }
+            // ThisKindOfThing =>
+            syn::Pat::Ident(syn::PatIdent {
+                ident: pat_ident, ..
+            }) => {
+                let ident = pat_ident.to_string();
+                for acc_ident in acc_ident.iter() {
+                    if acc_ident > &ident {
+                        return syn::Result::Err(syn::Error::new_spanned(
+                            pat_ident,
+                            format!("{} should sort before {}", ident, acc_ident),
+                        ));
+                    }
+                }
+                acc_ident.push(ident);
+            }
+            // _ =>
             syn::Pat::Wild(w) => wild = Some(w),
+            // everything else
             _ => {
                 return syn::Result::Err(syn::Error::new_spanned(pat, "unsupported by #[sorted]"));
             }

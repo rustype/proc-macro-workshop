@@ -5,24 +5,28 @@
 //
 // To run the code:
 //     $ cargo run
+
 use sorted::sorted;
 
-use std::fmt::{self, Display};
-use std::io;
-
 #[sorted]
-pub enum Error {
-    Fmt(fmt::Error),
-    Io(io::Error),
+pub enum Conference {
+    RustBeltRust,
+    RustConf,
+    RustFest,
+    RustLatam,
+    RustRush,
 }
 
-impl Display for Error {
+impl Conference {
     #[sorted::check]
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    pub fn region(&self) -> &str {
+        use self::Conference::*;
+
         #[sorted]
         match self {
-            Error::Io(e) => write!(f, "{}", e),
-            Error::Fmt(e) => write!(f, "{}", e),
+            RustFest => "Europe",
+            RustLatam => "Latin America",
+            _ => "elsewhere",
         }
     }
 }
