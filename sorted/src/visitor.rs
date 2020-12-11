@@ -84,7 +84,7 @@ where
             }
             syn::Pat::Wild(w) => wild = Some(w),
             _ => {
-                return syn::Result::Err(syn::Error::new_spanned(pat, "unrecognized pattern"));
+                return syn::Result::Err(syn::Error::new_spanned(pat, "unsupported by #[sorted]"));
             }
         }
     }
