@@ -1,7 +1,7 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::{ quote};
+use quote::quote;
 use syn::{braced, parse::Parse, parse_macro_input, Token};
 
 #[proc_macro]
@@ -9,7 +9,6 @@ pub fn seq(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as Seq);
     println!("{:#?}", input);
     let output = input.expand();
-    println!("{:#?}", output);
     match output {
         Ok(ts) => ts.into(),
         Err(e) => e.to_compile_error().into(),
@@ -29,8 +28,6 @@ impl Seq {
     fn expand(&self) -> syn::Result<proc_macro2::TokenStream> {
         let start: usize = self.start.base10_parse()?;
         let end: usize = self.end.base10_parse()?;
-        println!("start:    {}", start);
-        println!("end:      {}", end);
         let mut output = proc_macro2::TokenStream::new();
         if self.inclusive {
             for value in start..=end {
@@ -69,6 +66,31 @@ impl Seq {
                 // skip processing of other possibilities
                 continue;
             }
+            if let proc_macro2::TokenTree::Punct(punct) = &mut tokens[i] {
+                if punct.as_char() != '#' {
+                    i += 1;
+                    continue;
+                }
+                match (&tokens[i - 1], &tokens[i + 1]) {
+                    (proc_macro2::TokenTree::Ident(prefix), proc_macro2::TokenTree::Ident(var))
+                        if self.var.to_string() == var.to_string() =>
+                    {
+                        let ident = proc_macro2::Ident::new(
+                            &format!("{}{}", prefix.to_string(), value),
+                            prefix.span(),
+                        )
+                        .into();
+                        tokens.splice(i - 1..=i + 1, std::iter::once(ident));
+                        i += 2;
+                        continue;
+                    }
+                    _ => {
+                        i += 1;
+                        continue;
+                    }
+                }
+            }
+
             if let proc_macro2::TokenTree::Ident(ident) = &mut tokens[i] {
                 if *ident == self.var {
                     let mut lit = proc_macro2::Literal::usize_unsuffixed(value);
@@ -80,7 +102,7 @@ impl Seq {
             }
             i += 1;
         }
-        // at least ironic that we are implementing a mechanism
+        // it is ironic that we are implementing a mechanism
         // while using the same kind of mechanism
         syn::Result::Ok(quote!(#(#tokens)*))
     }
