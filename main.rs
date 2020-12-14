@@ -8,14 +8,18 @@
 
 use seq::seq;
 
-macro_rules! expand_to_nothing {
-    ($arg:literal) => {
-        // nothing
-    };
-}
-
-seq!(N in 0..4 {
-    expand_to_nothing!(N);
+seq!(N in 0..16 {
+    #[derive(Copy, Clone, PartialEq, Debug)]
+    enum Interrupt {
+        #(
+            Irq#N,
+        )*
+    }
 });
 
-fn main() {}
+fn main() {
+    let interrupt = Interrupt::Irq8;
+
+    assert_eq!(interrupt as u8, 8);
+    assert_eq!(interrupt, Interrupt::Irq8);
+}

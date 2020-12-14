@@ -1,13 +1,16 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
+use proc_macro2::Group;
 use quote::quote;
+use std::convert::From;
+use std::iter::FromIterator;
 use syn::{braced, parse::Parse, parse_macro_input, Token};
 
 #[proc_macro]
 pub fn seq(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as Seq);
-    println!("{:#?}", input);
+    // println!("{:#?}", input);
     let output = input.expand();
     match output {
         Ok(ts) => ts.into(),
@@ -26,11 +29,17 @@ struct Seq {
 
 impl Seq {
     fn expand(&self) -> syn::Result<proc_macro2::TokenStream> {
-        let output = self.expand_range(self.body.clone())?;
-        println!("{:#?}", output);
-        syn::Result::Ok(output)
+        if self.body.is_empty() {
+            syn::Result::Ok(quote!())
+        } else {
+            let (mut output, expanded) = self.expand_repetitions(self.body.clone())?;
+            if !expanded {
+                output = self.expand_range(output.clone())?;
+            }
+            // println!("{:#?}", output);
+            syn::Result::Ok(output)
+        }
     }
-
 
     fn expand_range(
         &self,
@@ -49,35 +58,41 @@ impl Seq {
         syn::Result::Ok(output)
     }
 
-    #[allow(dead_code)]
-    fn expand_repetitions(&self) -> syn::Result<proc_macro2::TokenStream> {
-        let mut tokens: Vec<proc_macro2::TokenTree> = self.body.clone().into_iter().collect();
+    fn expand_repetitions(
+        &self,
+        tokens: proc_macro2::TokenStream,
+    ) -> syn::Result<(proc_macro2::TokenStream, bool)> {
+        let mut expanded = false;
+        let mut tokens = Vec::from_iter(tokens);
         let mut i = 0;
-        while i < tokens.len() - 2 {
-            match &mut tokens[i..i + 3] {
-                // check for a repetition group
-                // #(...)*
-                [proc_macro2::TokenTree::Punct(pound), proc_macro2::TokenTree::Group(group), proc_macro2::TokenTree::Punct(star)]
-                    if pound.as_char() == '#' && star.as_char() == '*' =>
-                {
-                    if let proc_macro2::Delimiter::Parenthesis = group.delimiter() {
-                        let original_span = group.span();
-                        *group = proc_macro2::Group::new(
-                            group.delimiter(),
-                            self.expand_range(group.stream())?,
-                        );
-                        group.set_span(original_span);
-                        i += 3;
-                        continue;
-                    }
-                }
-                _ => {
+        while i < tokens.len() {
+            if let proc_macro2::TokenTree::Group(group) = &mut tokens[i] {
+                let (content, was_expanded) = self.expand_repetitions(group.stream())?;
+                let original_span = group.span();
+                *group = proc_macro2::Group::new(group.delimiter(), content);
+                group.set_span(original_span);
+                expanded = was_expanded;
+                i += 1;
+                continue;
+            }
+            if i + 3 > tokens.len() {
+                i += 1;
+                continue;
+            }
+            let body = match enter_repetition(&tokens[i..i + 3]) {
+                Some(body) => body,
+                None => {
                     i += 1;
                     continue;
                 }
-            }
+            };
+            // This is kinda hacky but sidesteps having to go around and replace N nodes n'friends
+            let group = proc_macro2::TokenTree::Group(Group::new(proc_macro2::Delimiter::None, self.expand_range(body)?));
+            tokens.splice(i..i + 3, std::iter::once(group));
+            i += 1;
+            expanded = true;
         }
-        syn::Result::Ok(quote!(#(#tokens)*))
+        syn::Result::Ok((quote!(#(#tokens)*), expanded))
     }
 
     fn inner_expand(
@@ -104,49 +119,67 @@ impl Seq {
                 // skip processing of other possibilities
                 continue;
             }
-            // detected some form of punctuation
-            if let proc_macro2::TokenTree::Punct(punct) = &mut tokens[i] {
-                // if it is not # we don't care for it
-                // so we just keep going
-                if punct.as_char() != '#' {
-                    i += 1;
-                    continue;
-                }
-
-                // try to match the previous and next tokens
-                // if both tokens are idents
-                // and the next token is an equal ident to the seq var
-                // create a new token and replace the three tokens with the new ones
-                if let (proc_macro2::TokenTree::Ident(prefix), proc_macro2::TokenTree::Ident(var)) =
-                    (&tokens[i - 1], &tokens[i + 1])
-                {
-                    if self.var.to_string() == var.to_string() {
-                        let ident = proc_macro2::Ident::new(
-                            &format!("{}{}", prefix.to_string(), value),
-                            prefix.span(),
-                        )
-                        .into();
-                        tokens.splice(i - 1..=i + 1, std::iter::once(ident));
-                        i += 2;
-                        continue;
-                    }
-                }
-            }
 
             if let proc_macro2::TokenTree::Ident(ident) = &mut tokens[i] {
                 if *ident == self.var {
                     let mut lit = proc_macro2::Literal::i64_unsuffixed(value);
                     lit.set_span(ident.span());
                     tokens[i] = proc_macro2::TokenTree::Literal(lit);
+                    i += 1;
+                    continue;
                 }
-                i += 1;
-                continue;
+                if i + 2 >= tokens.len() {
+                    i += 1;
+                    continue;
+                }
+                if let proc_macro2::TokenTree::Punct(punct) = &tokens[i + 1] {
+                    if punct.as_char() != '#' {
+                        i += 1;
+                        continue;
+                    }
+                    if let (
+                        proc_macro2::TokenTree::Ident(prefix),
+                        proc_macro2::TokenTree::Ident(var),
+                    ) = (&tokens[i], &tokens[i + 2])
+                    {
+                        if self.var.to_string() == var.to_string() {
+                            let ident = proc_macro2::Ident::new(
+                                &format!("{}{}", prefix.to_string(), value),
+                                prefix.span(),
+                            )
+                            .into();
+                            tokens.splice(i..i + 3, std::iter::once(ident));
+                            i += 2;
+                            continue;
+                        }
+                    }
+                }
             }
             i += 1;
         }
         // it is ironic that we are implementing a mechanism
         // while using the same kind of mechanism
         syn::Result::Ok(quote!(#(#tokens)*))
+    }
+}
+
+fn enter_repetition(tokens: &[proc_macro2::TokenTree]) -> Option<proc_macro2::TokenStream> {
+    assert!(tokens.len() == 3);
+    match &tokens[0] {
+        proc_macro2::TokenTree::Punct(punct) if punct.as_char() == '#' => {}
+        _ => return None,
+    }
+    match &tokens[2] {
+        proc_macro2::TokenTree::Punct(punct) if punct.as_char() == '*' => {}
+        _ => return None,
+    }
+    match &tokens[1] {
+        proc_macro2::TokenTree::Group(group)
+            if group.delimiter() == proc_macro2::Delimiter::Parenthesis =>
+        {
+            Some(group.stream())
+        }
+        _ => None,
     }
 }
 
