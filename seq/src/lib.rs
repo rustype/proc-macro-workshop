@@ -26,36 +26,27 @@ struct Seq {
 
 impl Seq {
     fn expand(&self) -> syn::Result<proc_macro2::TokenStream> {
-        let mut output = proc_macro2::TokenStream::new();
-        if self.inclusive {
-            for value in self.start..=self.end {
-                output.extend(self.inner_expand(value, self.body.clone()));
-            }
-        } else {
-            for value in self.start..self.end {
-                output.extend(self.inner_expand(value, self.body.clone()));
-            }
-        }
-        // let output = self.expand_range(self.body.clone())?;
+        let output = self.expand_range(self.body.clone())?;
         println!("{:#?}", output);
         syn::Result::Ok(output)
     }
 
-    #[allow(dead_code)]
+
     fn expand_range(
         &self,
-        mut tokens: proc_macro2::TokenStream,
+        tokens: proc_macro2::TokenStream,
     ) -> syn::Result<proc_macro2::TokenStream> {
+        let mut output = proc_macro2::TokenStream::new();
         if self.inclusive {
             for value in self.start..=self.end {
-                tokens.extend(self.inner_expand(value, self.body.clone()));
+                output.extend(self.inner_expand(value, tokens.clone()));
             }
         } else {
             for value in self.start..self.end {
-                tokens.extend(self.inner_expand(value, self.body.clone()));
+                output.extend(self.inner_expand(value, tokens.clone()));
             }
         }
-        syn::Result::Ok(tokens)
+        syn::Result::Ok(output)
     }
 
     #[allow(dead_code)]
